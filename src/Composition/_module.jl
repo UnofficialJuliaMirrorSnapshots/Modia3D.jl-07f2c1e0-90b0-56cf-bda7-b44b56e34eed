@@ -37,9 +37,10 @@ export updatePosition!, update!, driveJoint!
 export Object3D, AssemblyInternal, initAssemblyInternal!, initAssemblyComponent!, Scene
 export Part
 export SimulationModel
-export BodyWithTwoFrames
+export BodyWithTwoFrames, ContactBox, ContactBox2, ContactBox3
 export printObject3DAndAllChildren, writeObject3DAndAllChildrenOnJsonFile
-export set_r!, set_q!
+export set_r!, set_q!, set_r_abs!
+export Fixed
 export Revolute, setAngle!, connect, addRevoluteTorqueObject, computeTorque
 export Prismatic, setDistance!
 export FreeMotion
@@ -51,7 +52,7 @@ export Flange, RevoluteFlange
 export SignalToFlangeAngle, SignalToFlangeTorque
 export computeSignal
 
-export AdaptorForceElementToFlange
+export AdaptorForceElementToFlange, AdaptorForceElementToPFlange
 
 export setVariable_phi!, setVariable_r_rel!, setVariable_R_rel!
 
@@ -63,10 +64,11 @@ export G, EarthMass, EarthRadius
 export DLR_Visualization_renderer
 
 export ContactDetectionMPR_handler
-export initializeContactDetection!, selectContactPairs!, getDistances!, setComputationFlag, closeContactDetection!
+export initializeContactDetection!, selectContactPairsNoEvent!, selectContactPairsWithEvent!, getDistances!, setComputationFlag, closeContactDetection!
 
 export responseCalculation, print_ModelVariables
-
+export contactStart, contactEnd, regularize, resultantCoefficientOfRestitution, resultantDampingCoefficient
+export ElasticContactPairResponseMaterial, elasticContactPairCoefficients, normalRelativeVelocityAtContact
 
 using StaticArrays
 using DataStructures
@@ -80,6 +82,7 @@ import Modia3D.Solids
 import Modia3D.Graphics
 import Modia3D.Signals
 import JSON
+import Printf
 
 const NOTHING = Nothing
 
@@ -90,6 +93,7 @@ const AbstractContactMaterialOrNothing = Union{Modia3D.AbstractContactMaterial,N
 
 include("flange.jl")
 include("object3D.jl")
+include(joinpath("responseCalculation", "elasticCollisionResponse.jl"))
 include(joinpath("joints", "FixedJoint.jl"))
 include(joinpath("joints", "FreeMotion.jl"))
 include(joinpath("superObjects.jl"))
@@ -97,6 +101,7 @@ include("scene.jl")
 include("assembly.jl")
 include("sensors.jl")
 include("joints.jl")
+include(joinpath("joints", "Fixed.jl"))
 include(joinpath("joints", "Revolute.jl"))
 include(joinpath("joints", "Prismatic.jl"))
 include("adaptors.jl")

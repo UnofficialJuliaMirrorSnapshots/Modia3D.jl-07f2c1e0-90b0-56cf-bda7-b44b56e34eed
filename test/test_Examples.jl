@@ -4,21 +4,13 @@ import Modia3D
 
 # Test Modia3D - Examples
 
-# test/visual
-collisionPath = joinpath(Modia3D.path, "test", "collision")
-include(joinpath(collisionPath, "Collision_3Elements.jl"))
-# include(joinpath(collisionPath, "Collision_Bars.jl")) # is not working needs to be fixed
-include(joinpath(collisionPath, "Test_Collision.jl"))
-include(joinpath(collisionPath, "Test_Collision_moreRevolutes.jl"))
-include(joinpath(collisionPath, "Test_Collision_StarSetting.jl"))
-include(joinpath(collisionPath, "Test_MiniBsp.jl"))
-include(joinpath(collisionPath, "Test_Solids.jl"))
-
-# test/SignalToFlange
+# test/dynamics
 dynamicsPath = joinpath(Modia3D.path, "test", "dynamics")
 include(joinpath(dynamicsPath, "Simulate_ControllerDamper.jl"))
 include(joinpath(dynamicsPath, "Simulate_DamperMacro.jl"))
 include(joinpath(dynamicsPath, "Simulate_FourBar.jl"))
+include(joinpath(dynamicsPath, "Simulate_pathPlanning.jl"))
+include(joinpath(dynamicsPath, "Simulate_PendulumWithFixedJoint.jl"))
 
 # test/inertiaTensor
 inertiaPath = joinpath(Modia3D.path, "test", "inertiaTensor")

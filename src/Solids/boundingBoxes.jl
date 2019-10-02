@@ -1,13 +1,27 @@
 # License for this file: MIT (expat)
 # Copyright 2017-2018, DLR Institute of System Dynamics and Control
 #
-# This file is part of module 
+# This file is part of module
 #   Modia3D.Solids (Modia3D/Solids/_module.jl)
 #
 
 #------------------------------------------------------------------------------------
 # supportPoint(geo,r_abs,R_abs,e) - Return support point of geometry geo at position r_abs/R_abs in direction of unit vector e
 # function is called from mpr algorithm
+
+"""
+    r = supportPoint(geo, r_abs, R_abs, e)
+
+Return the absolute position vector `r` from world frame to *support point* of
+solid `geo`, resolved in world frame in [m]. The support point is the point of solid `geo`
+that is the most extreme in direction of unit vector `e`.
+
+# Arguments
+- `geo::Modia3D.AbstractSolidGeometry`: Solid geometry object.
+- `r_abs::AbstractVector`: Absolute position vector of `geo` reference frame.
+- `R_abs::AbstractMatrix`: Rotation matrix to rotate world frame in `geo` reference frame.
+- `e::AbstractVector`: Unit vector pointing into the desired direction.
+"""
 supportPoint(geo::Modia3D.AbstractSolidGeometry, r_abs::AbstractVector, R_abs::AbstractMatrix, e::AbstractVector) =
             r_abs + R_abs'*centroid(geo) + R_abs'*supportPoint_abs(geo, R_abs*e) + e*geo.rsmall
 
@@ -17,7 +31,7 @@ supportPoint(geo::SolidEllipsoid, r_abs::AbstractVector, R_abs::AbstractMatrix, 
             r_abs + R_abs'*supportPoint_abs(geo, R_abs*e)
 
 supportPoint(geo::SolidFileMesh, r_abs::AbstractVector, R_abs::AbstractMatrix, e::AbstractVector) =
-            r_abs + R_abs'*supportPoint_abs(geo, R_abs*e)
+            r_abs + R_abs'*supportPoint_abs(geo, R_abs*e) # + e*geo.rsmall
 
 
 #------------------------------------------------------------------------------------
@@ -35,7 +49,9 @@ function supportPoint_abs(geo::SolidEllipsoid, e_abs::AbstractVector)
 end
 
 # [Gino v.d. Bergen, p. 135]
-supportPoint_abs(geo::SolidBox, e_abs::AbstractVector) = [Basics.sign_eps(e_abs[1])*geo.Lx/2, Basics.sign_eps(e_abs[2])*geo.Ly/2, Basics.sign_eps(e_abs[3])*geo.Lz/2]
+
+supportPoint_abs(geo::SolidBox, e_abs::AbstractVector) = [Basics.sign_eps(e_abs[1])*(geo.Lx/2-geo.rsmall), Basics.sign_eps(e_abs[2])*(geo.Ly/2-geo.rsmall), Basics.sign_eps(e_abs[3])*(geo.Lz/2-geo.rsmall)]
+
 
 # [Gino v.d. Bergen, p. 136, XenoCollide, p. 168, 169]
 supportPoint_abs(geo::SolidCylinder, e_abs::AbstractVector) = norm([e_abs[1],e_abs[2]]) <= Modia3D.neps ?
@@ -115,7 +131,24 @@ end
 # boundingBox!(..) calculates the AABB (= Axis Aligned Bounding Box) for the geometries
 # it also uses support points for finding the points which are furthest away in each x,y,z - direction
 # it calles supportPoint_i
-function boundingBox!(geo::Modia3D.AbstractSolidGeometry, AABB::Basics.BoundingBox, r_abs::AbstractVector, R_abs::AbstractMatrix; tight::Bool=true, scaleFactor::Float64=0.1)
+"""
+    boundingBox!(geo, AABB, r_abs, R_abs; tight=true, scaleFactor=0.01)
+
+Returns the *Axis Aligned Bounding Box* of solid `geo` in argument `AABB`.
+
+# Arguments
+- `geo::Modia3D.AbstractSolidGeometry`: Solid geometry object.
+- `AABB::Modia3D.BoundingBox`: On return, update AABB with the actual *Axis Aligned Bounding Box* of solid `geo`.
+- `r_abs::AbstractVector`: Absolute position vector of `geo` reference frame.
+- `R_abs::AbstractMatrix`: Rotation matrix to rotate world frame in `geo` reference frame.
+- `tight::Bool`: If true, return the tightest AABB. If false return an AABB that is
+                scaleFactor bigger than the best fitting AABB
+                (for example, scaleFactor=0.1 means that the returned AABB is 10 percent bigger
+                than the best fitting AABB).
+- `scaleFactor::Float64`: If `tight=false`, the returned AABB is `scaleFactor` bigger than the
+                          best fitting AABB.
+"""
+function boundingBox!(geo::Modia3D.AbstractSolidGeometry, AABB::Basics.BoundingBox, r_abs::AbstractVector, R_abs::AbstractMatrix; tight::Bool=true, scaleFactor::Float64=0.01)
   xmin = supportPoint_i(geo, r_abs[1], R_abs[:,1], -1)
   xmax = supportPoint_i(geo, r_abs[1], R_abs[:,1], +1)
   ymin = supportPoint_i(geo, r_abs[2], R_abs[:,2], -1)
@@ -164,7 +197,7 @@ function boundingBox!(geo::Modia3D.AbstractSolidGeometry, AABB::Basics.BoundingB
 end
 
 
-function boundingBox!(geo::SolidSphere, AABB::Basics.BoundingBox, r_abs::AbstractVector, R_abs::AbstractMatrix; tight::Bool=true, scaleFactor::Float64=0.1)
+function boundingBox!(geo::SolidSphere, AABB::Basics.BoundingBox, r_abs::AbstractVector, R_abs::AbstractMatrix; tight::Bool=true, scaleFactor::Float64=0.01)
   r = geo.Dx/2
   if tight    # best fitting AABB which is possible
     AABB.x_min = r_abs[1] - r

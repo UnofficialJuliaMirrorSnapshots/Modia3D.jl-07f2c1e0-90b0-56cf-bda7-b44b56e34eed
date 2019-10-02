@@ -21,12 +21,14 @@ import Modia3D.Basics
 import Modia3D.Composition
 import Modia3D.Solids
 import ModiaMath
+import Printf
 
 using StaticArrays
 using DataStructures
 
 const NOTHING = Nothing
 
+include("analyzeMPR.jl")
 include("utilities.jl")
 include("mpr.jl")
 include("handler.jl")

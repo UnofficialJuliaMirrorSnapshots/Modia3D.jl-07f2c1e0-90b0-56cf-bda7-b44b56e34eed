@@ -13,7 +13,7 @@ Andrea Neumayr and Martin Otter, [DLR - Institute of System Dynamics and Control
 """
 module Basics
 
-export emptyArray, trailingPartOfName
+export trailingPartOfName
 
 export neps, sign_eps, radToDeg, degToRad
 export getAndCheckFullLibraryPath, getEnvironmentVariable
@@ -21,14 +21,23 @@ export zeroMVector, onesMVector, nullMRotation
 export ZeroMVector
 export normalizeVector, BoundingBox
 
+export readDictOfStructsFromJSON
+export listKeys
+
 export linearMovement
 export PositionMVector, RotationMMatrix, assertRotationMatrix
 
-using StaticArrays
-using LinearAlgebra
+export PTP_path, getPosition!, getPosition, getIndex, plotPath
+
+using  StaticArrays
+using  LinearAlgebra
+using  JSON
+import ModiaMath
+using  Unitful
 
 include("environment.jl")
 include("constantsAndFunctions.jl")
+include("pathPlanning.jl")
 
 
 

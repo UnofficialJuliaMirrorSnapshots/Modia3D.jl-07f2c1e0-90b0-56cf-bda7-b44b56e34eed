@@ -101,7 +101,7 @@ function connect(obj1::Object3D, obj2::Object3D;
                  r::AbstractVector = ModiaMath.ZeroVector3D,
                  R::Union{ModiaMath.RotationMatrix,NOTHING} = nothing,
                  q::Union{ModiaMath.Quaternion,NOTHING} = nothing,
-                 fixed::Bool = true)::NOTHING
+                 fixed::Bool = true)::Nothing
    if typeof(R) != NOTHING && typeof(q) != NOTHING
       error("Modia3D.connect(...): either R or q must be nothing but both have a value.")
    end

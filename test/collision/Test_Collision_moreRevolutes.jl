@@ -1,4 +1,4 @@
-module Test_Collision
+module Test_Collision_moreRevolutes
 
 using Modia3D
 using Modia3D.StaticArrays
@@ -15,7 +15,7 @@ vgreen  = Modia3D.Material(color="Green", transparency=0.5)
 vblack  = Modia3D.Material(color="Black", transparency=0.5)
 vyellow = Modia3D.Material(color="Yellow", transparency=0.5)
 vpink   = Modia3D.Material(color="Pink", transparency=0.5)
-cmat    = Modia3D.defaultContactMaterial()
+cmat    = "Steel"
 vMatAABB = Modia3D.Material(color="Grey", transparency=0.95)
 
 # dimensions
@@ -188,7 +188,7 @@ for time = range(tStart, stop=tEnd, length=101)
   s = Modia3D.linearMovement(2*Lx, tStart, tEnd, time)
   Modia3D.set_r!(rotM1, [0, 0, s])
   Modia3D.updatePosition!(world)
-  Modia3D.selectContactPairs!(world)
+  Modia3D.selectContactPairsWithEvent!(world)
   Modia3D.setComputationFlag(world)
   Modia3D.visualize!(world,time)
 =#
@@ -196,5 +196,5 @@ for time = range(tStart, stop=tEnd, length=101)
 end
 
 Modia3D.closeAnalysis!(collisionTest)
-println("... success of Test_Collision.jl!")
+println("... success of Test_Collision_moreRevolutes.jl!")
 end

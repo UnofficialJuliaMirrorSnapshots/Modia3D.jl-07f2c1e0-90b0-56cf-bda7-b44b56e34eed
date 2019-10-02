@@ -172,6 +172,18 @@ function build_superObjs!(scene::Scene, world::Object3D)::NOTHING
   end
   addIndicesOfCutJointsToSuperObj(scene)
 
+#=
+  println("superObjRow.superObjCollision.superObj")
+  for superObjRow in scene.superObjs
+  println("[")
+  for a in superObjRow.superObjCollision.superObj
+    println(ModiaMath.fullName(a))
+  end
+  println("]")
+  println(" ")
+  end
+=#
+
   hasMoreCollisionSuperObj ? (scene.collide = true) : (scene.collide = false)
   scene.initSuperObj = true
   end
@@ -267,12 +279,20 @@ function chooseAndBuildUpTree(world::Object3D, scene::Scene)
      build_superObjs!(scene, world)
      if scene.options.enableContactDetection && scene.collide
         initializeContactDetection!(world, scene)
+        append!(scene.allVisuElements, world.contactVisuObj1)
+        append!(scene.allVisuElements, world.contactVisuObj2)
+        append!(scene.allVisuElements, world.supportVisuObj1A)
+        append!(scene.allVisuElements, world.supportVisuObj1B)
+        append!(scene.allVisuElements, world.supportVisuObj1C)
+        append!(scene.allVisuElements, world.supportVisuObj2A)
+        append!(scene.allVisuElements, world.supportVisuObj2B)
+        append!(scene.allVisuElements, world.supportVisuObj2C)
      end
      initializeMassComputation!(scene)
   else
      build_tree!(scene, world)
      if scene.options.enableContactDetection
-        @error("Collision handling is only possible with the optimized structure. Please set useOptimizedStructure = true in Modia3D.SceneOptions.")
+        error("Collision handling is only possible with the optimized structure. Please set useOptimizedStructure = true in Modia3D.SceneOptions.")
      end
   end
   if scene.visualize
@@ -299,7 +319,7 @@ function initAnalysis!(assembly::Modia3D.AbstractAssembly;
       error("\nError message from Modia3D.initAnalysis!(..):\n",
             typeof(assembly), " has no reference frame.")
    end
-   println("initAnalysis!(assembly::Modia3D.AbstractAssembly;                        analysis::ModiaMath.AnalysisType=ModiaMath.KinematicAnalysis)")
+   #println("initAnalysis!(assembly::Modia3D.AbstractAssembly;                        analysis::ModiaMath.AnalysisType=ModiaMath.KinematicAnalysis)")
    # Construct Scene(..) object
    world = assembly._internal.referenceObject3D
    so    = assembly._internal.sceneOptions
@@ -345,7 +365,8 @@ function getDistances!(assembly::Modia3D.AbstractAssembly)
   assertInitAnalysis(assembly, "Modia3D.getDistances!(..)")
   if assembly._internal.scene.collide
     ch = assembly._internal.scene.options.contactDetection
-    getDistances!(ch)
+    world = assembly._internal.referenceObject3D
+    getDistances!(ch, world)
   else
     errorMessageCollision("Modia3D.getDistances!(..)")
   end
@@ -362,13 +383,25 @@ function setComputationFlag(assembly::Modia3D.AbstractAssembly)
   end
 end
 
-function selectContactPairs!(assembly::Modia3D.AbstractAssembly)
-  assertInitAnalysis(assembly, "Modia3D.selectContactPairs!(..)")
+function selectContactPairsWithEvent!(assembly::Modia3D.AbstractAssembly)
+  assertInitAnalysis(assembly, "Modia3D.selectContactPairsWithEvent!(..)")
   if assembly._internal.scene.collide
     ch = assembly._internal.scene.options.contactDetection
-    selectContactPairs!(ch)
+    world = assembly._internal.referenceObject3D
+    selectContactPairsWithEvent!(nothing, ch, world)
   else
-    errorMessageCollision("Modia3D.selectContactPairs!(..)")
+    errorMessageCollision("Modia3D.selectContactPairsWithEvent!(..)")
+  end
+end
+
+function selectContactPairsNoEvent!(assembly::Modia3D.AbstractAssembly)
+  assertInitAnalysis(assembly, "Modia3D.selectContactPairsNoEvent!(..)")
+  if assembly._internal.scene.collide
+    ch = assembly._internal.scene.options.contactDetection
+    world = assembly._internal.referenceObject3D
+    selectContactPairsNoEvent!(nothing, ch, world)
+  else
+    errorMessageCollision("Modia3D.selectContactPairsNoEvent!(..)")
   end
 end
 
@@ -407,30 +440,30 @@ end
 function closeAnalysis!(scene::Scene)
      # Close Visualisation
      closeVisualization(Modia3D.renderer[1])
-     Basics.emptyArray!(scene.allVisuElements)
+     empty!(scene.allVisuElements)
      scene.visualize = false
      # Close Collision detection
      if scene.collide
         closeContactDetection!(scene.options.contactDetection)
      end
-     Basics.emptyArray!(scene.stack)
-     Basics.emptyArray!(scene.buffer)
-     Basics.emptyArray!(scene.superObjs)
-     Basics.emptyArray!(scene.noCPairs)
+     empty!(scene.stack)
+     empty!(scene.buffer)
+     empty!(scene.superObjs)
+     empty!(scene.noCPairs)
      scene.collide = false
 
      scene.initSuperObj = false
 
      # Close signals and Forces and Torques
-     Basics.emptyArray!(scene.uniqueSignals)
-     Basics.emptyArray!(scene.uniqueForceTorques)
-     Basics.emptyArray!(scene.potentialVarInput)
-     Basics.emptyArray!(scene.potentialVarOutput)
-     Basics.emptyArray!(scene.flowVarInput)
-     Basics.emptyArray!(scene.flowVarOutput)
+     empty!(scene.uniqueSignals)
+     empty!(scene.uniqueForceTorques)
+     empty!(scene.potentialVarInput)
+     empty!(scene.potentialVarOutput)
+     empty!(scene.flowVarInput)
+     empty!(scene.flowVarOutput)
 
      # Close Spanning tree
-     Basics.emptyArray!(scene.tree)
+     empty!(scene.tree)
 
      # Close Analysis
      scene.initAnalysis = false

@@ -62,11 +62,13 @@ end
     simModel = SimulationModel(assembly::Modia3D.AbstractAssembly;
                                analysis::ModiaMath.AnalysisType=ModiaMath.DynamicAnalysis,
                                startTime = 0.0, stopTime  = 1.0, tolerance = 1e-4,
-                               interval  = (stopTime-startTime)/500.0)
+                               interval  = (stopTime-startTime)/500.0,
+                               maxStepSize = NaN, maxNumberOfSteps=missing)
 
 Generate a `simulationModel` from an `assembly` generated with macro [`Modia3D.@assembly`](@ref)
 and the type of `analysis` to be carried out on the `assembly`.
-Additionally, default `startTime`, `stopTime`, `tolerance`, `interval` for the simulation
+Additionally, default `startTime`, `stopTime`, `tolerance`, `interval`,
+`maxStepSize`, `maxNumberOfSteps`, for the simulation
 engine are defined. These values should be adapted so that assembly-specific, meaningful
 defaults are provided.
 """
@@ -83,6 +85,8 @@ struct SimulationModel <: ModiaMath.AbstractSimulationModel
                             stopTime  = 1.0,
                             tolerance = 1e-4,
                             interval  = (stopTime-startTime)/500.0,
+                            maxStepSize=NaN,
+                            maxNumberOfSteps=missing,
                             hev = 1e-8,
                             scaleConstraintsAtEvents::Bool = true)
       modelName = Modia3D.trailingPartOfName( string( typeof(assembly) ) )
@@ -113,21 +117,38 @@ struct SimulationModel <: ModiaMath.AbstractSimulationModel
       scene = Scene(sceneOptions)
       scene.analysis = analysis
       assembly._internal.scene = scene
+      if !scene.options.enableContactDetection
+          scene.collide = false
+      end
 
       # Build tree for optimized structure or standard structure
       # collision handling is only available for optimized structure
       nz = 0
       if scene.options.useOptimizedStructure
          build_superObjs!(scene, world)
-         if scene.options.enableContactDetection && scene.collide
+         if !scene.options.enableContactDetection
+             scene.collide = false
+         end
+
+         if scene.collide
             initializeContactDetection!(world, scene)
-            nz = scene.options.contactDetection.contactPairs.nz
+            if scene.collide
+                nz = scene.options.contactDetection.contactPairs.nz
+                append!(scene.allVisuElements, world.contactVisuObj1)
+                append!(scene.allVisuElements, world.contactVisuObj2)
+                append!(scene.allVisuElements, world.supportVisuObj1A)
+                append!(scene.allVisuElements, world.supportVisuObj1B)
+                append!(scene.allVisuElements, world.supportVisuObj1C)
+                append!(scene.allVisuElements, world.supportVisuObj2A)
+                append!(scene.allVisuElements, world.supportVisuObj2B)
+                append!(scene.allVisuElements, world.supportVisuObj2C)
+            end
          end
          initializeMassComputation!(scene)
       else
          build_tree!(scene, world)
          if scene.options.enableContactDetection
-            @error("Collision handling is only possible with the optimized structure. Please set useOptimizedStructure = true in Modia3D.SceneOptions.")
+            error("Collision handling is only possible with the optimized structure. Please set useOptimizedStructure = true in Modia3D.SceneOptions.")
          end
       end
 
@@ -145,6 +166,8 @@ struct SimulationModel <: ModiaMath.AbstractSimulationModel
                                 defaultStopTime  = stopTime,
                                 defaultTolerance = tolerance,
                                 defaultInterval  = interval,
+                                defaultMaxStepSize = maxStepSize,
+                                defaultMaxNumberOfSteps = maxNumberOfSteps,
                                 getResultNames   = Composition.getResultNames,
                                 getResult        = ModiaMath.Variables.getResult,
                                 storeResult!     = ModiaMath.Variables.storeVariables!,
@@ -245,6 +268,7 @@ end
 
 const str_DUMMY = "dummyDistance(nothing,nothing)"
 
+
 function getModelResidues!(m::SimulationModel, time::Float64, _x::Vector{Float64}, _derx::Vector{Float64}, _r::Vector{Float64}, _w::Vector{Float64})
    # println("... time = ", time, ", x = ", _x, ", derx = ", _derx)
    sim              = m.simulationState
@@ -262,11 +286,20 @@ function getModelResidues!(m::SimulationModel, time::Float64, _x::Vector{Float64
    # Handle initialization and termination of model
    if ModiaMath.isInitial(sim)
       # println("... isInitial = true")
+      if scene.collide
+         initializeContactDetection!(world, scene)
+         append!(scene.allVisuElements, world.contactVisuObj1)
+         append!(scene.allVisuElements, world.contactVisuObj2)
+
+         append!(scene.allVisuElements, world.supportVisuObj1A)
+         append!(scene.allVisuElements, world.supportVisuObj1B)
+         append!(scene.allVisuElements, world.supportVisuObj1C)
+         append!(scene.allVisuElements, world.supportVisuObj2A)
+         append!(scene.allVisuElements, world.supportVisuObj2B)
+         append!(scene.allVisuElements, world.supportVisuObj2C)
+      end
       if scene.visualize
          initializeVisualization(Modia3D.renderer[1], scene.allVisuElements)
-      end
-      if scene.options.enableContactDetection && scene.collide
-         initializeContactDetection!(world, scene)
       end
    end
 
@@ -322,6 +355,7 @@ function getModelResidues!(m::SimulationModel, time::Float64, _x::Vector{Float64
          obj.visualizationFrame.R_abs = obj.R_abs
       end
 
+
       # Compute forces and torques
       initializeFlowVariables(scene)
       setPotentialVariables(scene)
@@ -353,15 +387,19 @@ function getModelResidues!(m::SimulationModel, time::Float64, _x::Vector{Float64
             w    = dynamics.w
             #println("w = ",w)
             grav = gravityAcceleration(scene.options.gravityField, obj.r_abs)
-            #println("grav = ", grav)
+            # println("grav = ", grav)
             if rCM === ModiaMath.ZeroVector3D
-               dynamics.f = -mass*( obj.R_abs*(dynamics.a0 - grav) )
+               dynamics.f = -mass*( obj.R_abs*(dynamics.a0  - grav) )
                dynamics.t = -(I*dynamics.z + cross(w, I*w))
+               # println("(dynamics.a0  - grav) = ", (dynamics.a0  - grav) )
+               #println("dynamics.t = ", dynamics.t)
+               #println(" ")
             else
                dynamics.f = -mass*( obj.R_abs*(dynamics.a0 - grav) +
                                   cross(dynamics.z, rCM) + cross(w, cross(w, rCM)))
                dynamics.t = -(I*dynamics.z + cross(w, I*w)) + cross(rCM, dynamics.f)
             end
+
          else
             dynamics.f = ModiaMath.ZeroVector3D
             dynamics.t = ModiaMath.ZeroVector3D
@@ -382,53 +420,84 @@ function getModelResidues!(m::SimulationModel, time::Float64, _x::Vector{Float64
 
       # Compute signed distances of all contact shapes during zero-crossing computation
       setComputationFlag(ch)
-      if ModiaMath.isZeroCrossing(sim) || ModiaMath.isEvent(sim)
-         selectContactPairs!(ch)
+      if ModiaMath.isEvent(sim)    # with Event
+         selectContactPairsWithEvent!(sim, ch, world) #sim#
+      elseif ModiaMath.isZeroCrossing(sim) # no Event
+         selectContactPairsNoEvent!(sim, ch, world) #sim
       else
-         getDistances!(ch)
+         getDistances!(ch, world)
       end
 
       # Handle zero crossing event
-      contact::Bool = false
-      for i in eachindex(chpairs.z)
-         obj1  = chpairs.contactObj1[i]
-         obj2  = chpairs.contactObj2[i]
+      simh = sim.eventHandler
+      for (pairID, pair) in ch.contactDict
+        obj1 = pair.obj1
+        obj2 = pair.obj2
+        rContact      = (pair.contactPoint1 + pair.contactPoint2)/2.0
+        contactNormal = pair.contactNormal
 
-         if ModiaMath.isLogEvents(sim)
-            #if ModiaMath.isInitial(sim)
-            #   str = ""   # when logging, do not print z
-            #else
-               name1 = typeof(obj1) == NOTHING ? "nothing" : ModiaMath.instanceName(obj1)
-               name2 = typeof(obj2) == NOTHING ? "nothing" : ModiaMath.instanceName(obj2)
-               str   = "distance(" * string(name1) * "," * string(name2) * ")"
-            #end
-         else
-            str = str_DUMMY
-         end
+        #simh = sim.eventHandler
+        #println( "time = ", sim.time, ": ", ModiaMath.instanceName(obj1), " ", ModiaMath.instanceName(obj2),
+        #         " i = ", i, ", initial = ", simh.initial, ", event = ", simh.event, " change = ", chpairs.changeDirection[i] )
+        if ModiaMath.isEvent(sim)
+            # Include contact pair material into collision pair
+            if haskey(ch.lastContactDict, pairID)
+                # use material (reference) from previous event
+                pair.contactPairMaterial = ch.lastContactDict[pairID].contactPairMaterial    # improve later (should avoid to inquire pairID twice)
+            else
+                # determine contact pair material
+                pair.contactPairMaterial = contactStart(obj1, obj2, rContact, contactNormal,
+                                                         scene.options.elasticContactReductionFactor)
+                simh.restart = max(simh.restart, ModiaMath.Restart)
+                simh.newEventIteration = false
+                if ModiaMath.isLogEvents(simh.logger)
+                    name1 = ModiaMath.instanceName(obj1)
+                    name2 = ModiaMath.instanceName(obj2)
+                    n     = contactNormal
+                    println("        distance(", name1, ",", name2, ") = ", pair.distanceWithHysteresis, " became < 0")
+                    Printf.@printf("            contact normal = [%.3g,%.3g,%.3g], contact position = [%.3g,%.3g,%.3g], c_res=%.3g, d_res=%.3g\n",
+                                   n[1],n[2],n[3],rContact[1],rContact[2],rContact[3], pair.contactPairMaterial.c_res, pair.contactPairMaterial.d_res)
+                end
+            end
+        end
 
-         # Penetration depth
-         s = chpairs.z[i]
+        # println("length(ch.dictCommunicate) ", length(ch.dictCommunicate) )
+        (f1,f2,t1,t2) = responseCalculation(pair.contactPairMaterial, obj1, obj2, rContact, contactNormal,
+                                             pair.distanceWithHysteresis, time, file)
 
-         # Generate state event, if s < 0 changes
-         contact = ModiaMath.negative!(sim, i, s, str)
+        # Transform forces/torques in local part frames
+        obj1.dynamics.f += obj1.R_abs*f1
+        obj1.dynamics.t += obj1.R_abs*t1
+        obj2.dynamics.f += obj2.R_abs*f2
+        obj2.dynamics.t += obj2.R_abs*t2
+#=
+               if time > 0.785 && time < 0.787  && String(ModiaMath.instanceName(obj1)) != "table.box1"
+                  println("obj1= \"", ModiaMath.instanceName(obj1), "\" obj2 = ", ModiaMath.instanceName(obj2), " f = ", obj1.dynamics.f, " t = ", obj1.dynamics.t, " rContact = ", rContact, " ctNormal[i] ", ModiaMath.Vector3D(chpairs.contactNormal[i]) ," time = ", time)
+               end
+=#
+      end
 
-         if contact
-            #println("... Contact ", str, " active at time = ", sim.time)
-            r1 = ModiaMath.Vector3D(chpairs.contactPoint1[i])
-            r2 = ModiaMath.Vector3D(chpairs.contactPoint2[i])
-            rContact = (r1 + r2)/2.0
+      if ModiaMath.isEvent(sim)
+            # Should be possible to make this more efficient
+            for (pairID, pair) in ch.lastContactDict
+                if !haskey(ch.contactDict, pairID)
+                    contactEnd(pair.contactPairMaterial, pair.obj1, pair.obj2)
+                    simh.restart = max(simh.restart, ModiaMath.Restart)
+                    simh.newEventIteration = false
+                    if !ModiaMath.isLogEvents(simh.logger)
+                        break
+                    end
+                    name1 = ModiaMath.instanceName(pair.obj1)
+                    name2 = ModiaMath.instanceName(pair.obj2)
+                    println("        distance(", name1, ",", name2, ")  became > 0")
+                end
+            end
 
-            (f1,f2,t1,t2) = responseCalculation(obj1.data.contactMaterial,
-                                                obj2.data.contactMaterial,
-                                                obj1, obj2, s, rContact,
-                                                ModiaMath.Vector3D(chpairs.contactNormal[i]), time, file)
-
-            # Transform forces/torques in local part frames
-            obj1.dynamics.f += obj1.R_abs*f1
-            obj1.dynamics.t += obj1.R_abs*t1
-            obj2.dynamics.f += obj2.R_abs*f2
-            obj2.dynamics.t += obj2.R_abs*t2
-         end
+            # Save contactDict in lastContactDict
+            empty!(ch.lastContactDict)
+            for (pairID, pair) in ch.contactDict
+                push!(ch.lastContactDict, pairID => pair)
+            end
       end
    end
 

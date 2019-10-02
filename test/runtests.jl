@@ -1,3 +1,4 @@
+module Modia3D_Runtests
 
 import Modia3D
 
@@ -10,8 +11,10 @@ using Modia3D.Test
    include("test_Composition.jl")
    include("test_DynamicExamples.jl")
    include("test_Examples.jl")
-
+   include("test_Examples_Collision.jl")
    include("runexamples.jl")
 
    println("\n... success of all tests!")
+end
+
 end

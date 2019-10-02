@@ -49,13 +49,13 @@ mutable struct FreeMotion <: Modia3D.AbstractJoint
                        q_start::AbstractVector = ModiaMath.NullQuaternion,
                        w_start::AbstractVector = ModiaMath.ZeroVector3D)
 
-      r    = ModiaMath.RealSVector3(  :r   , numericType=ModiaMath.XD_EXP                ,             unit="m"    , start=r_start, fixed=true , analysis=ModiaMath.OnlyDynamicAnalysis, info="Relative position vector from origin of obj 1 to origin of obj 2, resolved in obj1")
-      v    = ModiaMath.RealSVector3(  :v   , numericType=ModiaMath.XD_IMP                , integral=r, unit="m/s"  , start=v_start, fixed=true , analysis=ModiaMath.OnlyDynamicAnalysis, info="der(r): relative velocity of origin of obj 2 with respect to origin of obj 1, resolved in obj 1")
+      r    = ModiaMath.RealSVector3(  :r   , numericType=ModiaMath.XD_EXP                ,             unit="m"    , start=r_start, fixed=true, nominal=1.0, analysis=ModiaMath.OnlyDynamicAnalysis, info="Relative position vector from origin of obj 1 to origin of obj 2, resolved in obj1")
+      v    = ModiaMath.RealSVector3(  :v   , numericType=ModiaMath.XD_IMP                , integral=r, unit="m/s"  , start=v_start, fixed=true, nominal=1.0, analysis=ModiaMath.OnlyDynamicAnalysis, info="der(r): relative velocity of origin of obj 2 with respect to origin of obj 1, resolved in obj 1")
       a    = ModiaMath.RealSVector3(  :a   , numericType=ModiaMath.DER_XD_IMP            , integral=v, unit="m/s^2",                                                                     info="der(v): relative acceleration of origin of obj 2 with respect to origin of obj 1, resolved in obj 1")
 
-      q    = ModiaMath.RealSVector{4}(:q   , numericType=ModiaMath.XD_IMP                ,               start=q_start, fixed=false,                                         info="Relative quaternion to rotate obj 1 into obj 2")
+      q    = ModiaMath.RealSVector{4}(:q   , numericType=ModiaMath.XD_IMP                ,               start=q_start, fixed=false, nominal=1.0,                            info="Relative quaternion to rotate obj 1 into obj 2")
       derq = ModiaMath.RealSVector{4}(:derq, numericType=ModiaMath.DER_XD_IMP, integral=q, unit="1/s",                               analysis=ModiaMath.OnlyDynamicAnalysis, info="der(q)")
-      w    = ModiaMath.RealSVector3(  :w   , numericType=ModiaMath.XD_IMP                , unit="rad/s", start=w_start, fixed=true , analysis=ModiaMath.OnlyDynamicAnalysis, info="Relative angular velocity of obj 2 with respect to obj 1, resolved in obj 2")
+      w    = ModiaMath.RealSVector3(  :w   , numericType=ModiaMath.XD_IMP                , unit="rad/s", start=w_start, fixed=true , nominal=1.0, analysis=ModiaMath.OnlyDynamicAnalysis, info="Relative angular velocity of obj 2 with respect to obj 1, resolved in obj 2")
       z    = ModiaMath.RealSVector3(  :z   , numericType=ModiaMath.DER_XD_IMP, integral=w, unit="rad/s^2",                           analysis=ModiaMath.OnlyDynamicAnalysis, info="der(w): Relative angular acceleration of obj 2 with respect to obj 1, resolved in obj 2")
 
       residue_w = ModiaMath.RealSVector3(:residue_w, numericType=ModiaMath.FD_IMP, analysis=ModiaMath.OnlyDynamicAnalysis, info="Angular velocity residue")
@@ -217,6 +217,15 @@ mutable struct Object3D <: Modia3D.AbstractAssemblyComponent
                                                            # = False    : Coordinate system of Object3D is never visualized
                                                            # = Inherited: Coordinate system of Object3D is visualized, if SceneOptions(visualizeFrames=true)
    visualizationFrame::Union{Object3D,NOTHING}                # If to be visualized, the Object3D holding the coordinate system.
+   contactVisuObj1::Union{Vector{Object3D},NOTHING}
+   contactVisuObj2::Union{Vector{Object3D},NOTHING}
+
+   supportVisuObj1A::Union{Vector{Object3D},NOTHING}
+   supportVisuObj1B::Union{Vector{Object3D},NOTHING}
+   supportVisuObj1C::Union{Vector{Object3D},NOTHING}
+   supportVisuObj2A::Union{Vector{Object3D},NOTHING}
+   supportVisuObj2B::Union{Vector{Object3D},NOTHING}
+   supportVisuObj2C::Union{Vector{Object3D},NOTHING}
 
    # Data for dynamic simulation
    dynamics::Union{Object3Ddynamics, NOTHING}   # Data for dynamic simulation
@@ -245,6 +254,16 @@ mutable struct Object3D <: Modia3D.AbstractAssemblyComponent
       obj.computeAcceleration = false
       obj.visualizeFrame     = typeof(visualizeFrame) == Modia3D.Ternary ? visualizeFrame : (visualizeFrame ? Modia3D.True : Modia3D.False)
       obj.visualizationFrame = nothing
+      obj.contactVisuObj1    = nothing
+      obj.contactVisuObj2    = nothing
+
+      obj.supportVisuObj1A   = nothing
+      obj.supportVisuObj1B   = nothing
+      obj.supportVisuObj1C   = nothing
+      obj.supportVisuObj2A   = nothing
+      obj.supportVisuObj2B   = nothing
+      obj.supportVisuObj2C   = nothing
+
       obj.dynamics           = nothing
       return obj
    end
@@ -279,7 +298,7 @@ mutable struct Object3D <: Modia3D.AbstractAssemblyComponent
 
       obj = new(ModiaMath.ComponentInternal(), parent, Vector{Object3D}[], fixedJoint,
                 false, false, false, r_rel, R_rel, r_abs, R_abs, nothing, data,
-                Modia3D.AbstractTwoObject3DObject[], false, false, false, false, visualizeFrame2, nothing, nothing)
+                Modia3D.AbstractTwoObject3DObject[], false, false, false, false, visualizeFrame2, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
 
       if !fixed
          obj.joint = FreeMotion(obj; r_start = r_rel,
@@ -303,7 +322,7 @@ mutable struct Object3D <: Modia3D.AbstractAssemblyComponent
             twoObject3Dobject::Vector{Modia3D.AbstractTwoObject3DObject},
             visualizeFrame::Modia3D.Ternary) =
       new(_internal, parent, children, joint, false, false, false, r_rel,
-          R_rel, r_abs, R_abs, nothing, data, twoObject3Dobject, false, false, false, false, visualizeFrame, nothing, nothing)
+          R_rel, r_abs, R_abs, nothing, data, twoObject3Dobject, false, false, false, false, visualizeFrame, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
 end
 
 
@@ -363,8 +382,8 @@ hasChildren(          obj::Object3D) = length(obj.children) > 0
 hasNoChildren(        obj::Object3D) = length(obj.children) == 0
 isWorld(              obj::Object3D) = hasNoParent(obj) && ModiaMath.isInComponent(obj) && typeof(obj._internal.within._internal.scene) == Scene && obj._internal.within._internal.scene.initAnalysis
 isNotWorld(           obj::Object3D) = !(isWorld(obj))
-isFixed(              obj::Object3D) = typeof(obj.joint) == FixedJoint
-isNotFixed(           obj::Object3D) = typeof(obj.joint) != FixedJoint
+isFixed(              obj::Object3D) = typeof(obj.joint) == FixedJoint || typeof(obj.joint) == TreeJointFixed
+isNotFixed(           obj::Object3D) = typeof(obj.joint) != FixedJoint && typeof(obj.joint) != TreeJointFixed
 isFree(               obj::Object3D) = typeof(obj.joint) == FreeMotion
 isNotFree(            obj::Object3D) = typeof(obj.joint) != FreeMotion
 hasJoint(             obj::Object3D) = isNotFixed(obj) && isNotFree(obj)
@@ -396,9 +415,17 @@ returns true, if `obj` is visualized with renderer `renderer`.
 """
 isVisible( obj::Object3D, renderer::Modia3D.AbstractRenderer) = isVisible(obj.data, renderer)
 
-function canCollide(obj::Object3D)
+function canCollide(obj::Object3D)::Bool
   if typeof(obj.data) == Modia3D.Solids.Solid
-    return typeof(obj.data.contactMaterial) != NOTHING && typeof(obj.data.geo) != NOTHING
+    if typeof(obj.data.geo) != Nothing && typeof(obj.data.contactMaterial) != Nothing
+        if typeof(obj.data.contactMaterial) == String
+            return obj.data.contactMaterial != ""
+        else
+            return true
+        end
+    else
+        return false
+    end
   else
     return false
   end

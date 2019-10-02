@@ -21,7 +21,6 @@
 using LinearAlgebra
 EYE3() = Matrix(1.0I,3,3)
 
-
 const InertiaMatrix  = SMatrix{3,3,Float64,9}
 
 
@@ -60,7 +59,15 @@ struct SolidBox <: Modia3D.AbstractSolidGeometry
     @assert(Ly >= 0.0)
     @assert(Lz >= 0.0)
     @assert(rsmall >= 0.0)
+
     rsmall2 = min(rsmall, 0.1*min(Lx, Ly, Lz)) # at most 10% of the smallest edge length
+    if rsmall2 < rsmall
+        println("rsmall in SolidBox changed from $rsmall to $rsmall2")
+    end
+    @assert(Lx >= 2*rsmall2)
+    @assert(Ly >= 2*rsmall2)
+    @assert(Lz >= 2*rsmall2)
+
     new(Lx,Ly,Lz,rsmall2)
   end
 end
@@ -177,12 +184,16 @@ struct SolidFileMesh <: Modia3D.AbstractSolidGeometry
   centroidAlgo::SVector{3,Float64}
   inertia::SMatrix{3,3,Float64,9}
   function SolidFileMesh(filename::AbstractString; scaleFactor=Basics.onesMVector()  , useGraphicsMaterialColor::Bool=false, smoothNormals::Bool=false)
-     @assert(isfile(filename))
+     if !isfile(filename)
+        error("SolidFileMesh(\"$filename\",...): file not found.")
+     end
+     # @assert(isfile(filename))
      @assert(scaleFactor[1] >= 0.0)
      @assert(scaleFactor[2] >= 0.0)
      @assert(scaleFactor[3] >= 0.0)
      (centroid, longestEdge, objPoints, facesIndizes) = getObjInfos(filename, scaleFactor)
      (volume, centroidAlgo, inertia) = computeMassProperties(objPoints, facesIndizes; bodyCoords=false)
+     #println("volume = ", volume)
      fileMesh = new(filename, scaleFactor, useGraphicsMaterialColor, smoothNormals, centroid, longestEdge, objPoints, facesIndizes, volume, centroidAlgo, inertia)
      return fileMesh
   end
@@ -238,6 +249,11 @@ topArea(geo::Modia3D.AbstractSolidGeometry) = bottomArea(geo)
 
 
 #------------------volume-----------------------------------------------
+"""
+    V = volume(geo)
+
+Return the volume of the solid geometry `geo::Modia3D.AbstractSolidGeometry` in [m^3].
+"""
 volume(geo::Modia3D.AbstractSolidGeometry) = bottomArea(geo)*lengthGeo(geo)
 volume(geo::SolidSphere)                   = 4/3*pi*(geo.Dx/2)^3
 function volume(geo::SolidEllipsoid)
@@ -274,10 +290,11 @@ function volume(geo::SolidCone)
 end
 function volume(geo::SolidFileMesh)
     if !isempty(geo.facesIndizes)
-        return geo.volume
+    #  println("geo.volume = ", geo.volume)
+      return geo.volume
     else
-        println("SolidFileMesh: ", geo.filename, ". The surface areas must be triangular, and each triangle should be specified in right-handed/counter-clockwise order. Otherwise it is not possible to compute a volume.")
-        return nothing
+      println("SolidFileMesh: ", geo.filename, ". The surface areas must be triangular, and each triangle should be specified in right-handed/counter-clockwise order. Otherwise it is not possible to compute a volume.")
+      return nothing
     end
 end
 
@@ -300,6 +317,13 @@ lengthGeo(geo::SolidFileMesh)                 = error("lengthGeo(SolidFileMesh):
 
 
 #------------------------centroid of geometries----------------------------------------
+"""
+    r = centroid(geo)
+
+Return position vector from solid reference frame to [centroid](https://en.wikipedia.org/wiki/Centroid)
+of solid `geo::Modia3D.AbstractSolidGeometry` in [m]. If the solid has a uniform density,
+the centroid is identical to the *center of mass*.
+"""
 centroid(geo::Modia3D.AbstractSolidGeometry) = ModiaMath.ZeroVector3D
 centroid(geo::SolidCone)                     = SVector{3,Float64}([0.0,0.0,geo.Lz/4])
 function centroid(geo::SolidFileMesh)
@@ -312,6 +336,14 @@ end
 
 
 #------------------------inertia matrix of geometries-----------------------------------
+"""
+   I = inertiaMatrix(geo, mass)
+
+Return [inertia matrix](https://en.wikipedia.org/wiki/Moment_of_inertia) `I` of solid
+`geo::Modia3D.AbstractSolidGeometry` with respect to the
+solid reference frame in [kg*m^2] as `SMatrix{3,3,Float64,9}`. Hereby it is assumed that
+`geo` has uniform density and `mass` is the mass of `geo` in [kg].
+"""
 inertiaMatrix(geo::SolidSphere, mass::Number) = InertiaMatrix(mass/10*geo.Dx^2*EYE3())
 inertiaMatrix(geo::SolidEllipsoid, mass::Number) = InertiaMatrix(mass/20*Diagonal([geo.Dy^2 + geo.Dz^2,
                                                                                    geo.Dx^2 + geo.Dz^2,
@@ -327,7 +359,6 @@ function inertiaMatrix(geo::SolidCylinder, mass::Number)
 end
 function inertiaMatrix(geo::SolidCapsule, massGeo::Number)
     @warn "from Modia3D.inertiaMatrix(SolidCapsule): inertia matrix is not fully tested yet!"
-
     # mass = rho * volume
     #=
     volGeo = volume(geo)
@@ -434,6 +465,7 @@ function inertiaMatrix(geo::SolidPipe, mass::Number)
     end
 end
 function inertiaMatrix(geo::SolidFileMesh, mass::Number)
+  #println("mass = ", mass)
     if !isempty(geo.facesIndizes)
         return geo.inertia.*mass
     else

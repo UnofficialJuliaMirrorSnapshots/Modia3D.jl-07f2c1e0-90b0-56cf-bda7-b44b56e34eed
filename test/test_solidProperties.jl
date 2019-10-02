@@ -195,5 +195,6 @@ end
    @test isapprox(Modia3D.bottomArea(solid.cone.data.geo), pi*DxCone/2*DyCone/2)
 end
 
+
 println("... success of test_solidProperties.jl!")
 end

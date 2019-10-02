@@ -4,8 +4,8 @@
 module Modia3D
 
 const path = dirname(dirname(@__FILE__))   # Absolute path of package directory
-const Version = "0.3.0"
-const Date = "2019-04-06"
+const Version = "0.4.0"
+const Date = "2019-09-27"
 
 println("\nImporting Modia3D Version $Version ($Date)")
 
@@ -36,6 +36,9 @@ abstract type AbstractDLR_VisualizationRenderer <: AbstractRenderer end   # Comm
 
 abstract type AbstractMassProperties    end
 
+abstract type AbstractKeys    end
+abstract type AbstractContactPairMaterial end # Constants needed to compute the contact response between two objects
+
 import ModiaMath
 abstract type AbstractAssemblyInternal  <: ModiaMath.AbstractComponentInternal end
 abstract type AbstractAssemblyComponent <: ModiaMath.AbstractComponentWithVariables end # Objects that can be stored in an Assembly (has elements name and within)
@@ -50,6 +53,8 @@ abstract type AbstractForceTorque <: AbstractAssemblyComponent end  # Object com
 abstract type AbstractSignal <: AbstractAssemblyComponent end # It is a Signal with one output variable
 abstract type AbstractSignalAdaptor  <: AbstractAssemblyComponent end
 abstract type AbstractForceAdaptor   <: AbstractAssemblyComponent end
+
+
 
 
 # Enumerations
@@ -108,6 +113,21 @@ export @signal
 export @bus
 export @forceElement
 export Object3D
+
+export Sphere, Ellipsoid, Box, Cylinder, Capsule, Beam, Cone, Pipe
+export Spring, GearWheel, CoordinateSystem, Grid, FileMesh
+
+export Solid, SolidFileMesh, SolidWithConvexDecomposition
+export SolidSphere, SolidEllipsoid, SolidBox, SolidCylinder, SolidCapsule, SolidBeam, SolidCone, SolidPipe
+export MassProperties
+export Fixed, Revolute, Prismatic
+
+export UniformGravityField, PointGravityField, NoGravityField
+export Material
+export SceneOptions, SimulationModel
+export visualizeAssembly!, print_ModelVariables
+
+export PTP_path, getPosition!, getPosition, getIndex, plotPath
 
 
 # Add import clauses used in examples and test

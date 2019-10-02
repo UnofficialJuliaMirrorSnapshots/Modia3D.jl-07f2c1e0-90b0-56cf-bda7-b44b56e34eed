@@ -17,7 +17,7 @@ vyellow = Modia3D.Material(color="Yellow", transparency=0.5)
 vpink   = Modia3D.Material(color="Pink", transparency=0.5)
 vMatAABB = Modia3D.Material(color="Grey", transparency=0.95)
 
-cmat = Modia3D.defaultContactMaterial()
+cmat = "Steel"
 
 # Base dimensions
 length1  = 2.0
@@ -129,7 +129,7 @@ for time = range(tStart, stop=tEnd, length=101)  # 0:0.01:0.01
 
 
   Modia3D.updatePosition!(as)
-  Modia3D.selectContactPairs!(as)
+  Modia3D.selectContactPairsWithEvent!(as)
 
   as.rotM1AABB.data.Lx = abs(AABB[2][1].x_max - AABB[2][1].x_min)
   as.rotM1AABB.data.Ly = abs(AABB[2][1].y_max - AABB[2][1].y_min)

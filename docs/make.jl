@@ -10,6 +10,8 @@ makedocs(
      "Manual" => [
         "man/GettingStarted.md"
         "man/Examples.md"
+        "man/Materials.md"
+        "man/CollisionHandling.md"
         "man/Plans.md"
         ],
      "Library" => [
@@ -18,7 +20,9 @@ makedocs(
         "lib/Solids.md",
         "lib/ForceElements.md",
         "lib/Basics.md"
+     ],
+     "Internal" => [
+        "internal/ContactDetection.md"
      ]
   ]
 )
-

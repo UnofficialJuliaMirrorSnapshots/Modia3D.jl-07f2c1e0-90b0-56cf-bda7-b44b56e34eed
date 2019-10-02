@@ -21,18 +21,18 @@ closeVisualization(renderer::Modia3D.AbstractRenderer)        = error("No render
 
 Generate a new ContactPairs structure used for communication between the Object3D handler and a ContactDetection handler.
 
-  nzmax::Int: Maximum number of zero-crossing functions that shall be used
-- collSuperObjs::Vector{Vector{Modia3D.AbstractObject3Ddata}}: Objects3D that can collide with each other.
+- `nzmax::Int: Maximum number of zero-crossing functions that shall be used
+- `collSuperObjs::Vector{Vector{Modia3D.AbstractObject3Ddata}}`: Objects3D that can collide with each other.
   collSuperObjs[i] is a vector of Objects3D that are rigidly fixed to each other.
   Note, for ever Object3D in this vector, the following holds:
   c1i = celement[i] -> canCollide(c1i[j]) = true; c1i[j].geo <: AbstractSolidGeometry
-- noCPairs::Vector{Vector{Int}}: Objects3D where contact detection shall be switched off.
+- `noCPairs::Vector{Vector{Int}}`: Objects3D where contact detection shall be switched off.
   If c2i = noCPairs[i] then c2i[j] > i, and collision detections between collSuperObjs[i][:] and
   collSuperObjs[c2i[j]][:] shall not take place.
-- DummyObject3D::Modia3D.AbstractObject3Ddata: A dummy Object3D that can be used in the struct as element of a vector of Object3Ds
+- `DummyObject3D::Modia3D.AbstractObject3Ddata`: A dummy Object3D that can be used in the struct as element of a vector of Object3Ds
   to fill the array with a dummy value of the correct type.
 """
-struct ContactPairs
+mutable struct ContactPairs
    # Solid shapes used in contact detection (provided by Object3D handler)
    collSuperObjs::Array{Array{Object3D}}
    noCPairs::Array{Array{Int64,1}}
@@ -41,32 +41,23 @@ struct ContactPairs
 
 
    # Dimensions
+   nmax::Int                                       # all possible collision pairs
    ne::Int                                         # length(collSuperObjs)
    nz::Int                                         # length(z)
+   nzContact::Int                                  # length(z | z has contact) length of z where zi has contact
    allPossibleContactPairsInz::Bool                # = true, if nz == number of all possible contact pairs
 
-   # All vectors below have length nz and are computed by functions selectContactPairs!(...) and getDistances!(...)
-   z::Vector{Float64}                              # Vector of zero crossing functions. z[i] < 0.0 if i-th contact pair has penetration
 
-   contactPoint1::Vector{MVector{3,Float64}}       # Absolute position vector to first contact point on contactObj1
-   contactPoint2::Vector{MVector{3,Float64}}       # Absolute position vector to second contact point on contactObj2
-   contactNormal::Vector{MVector{3,Float64}}       # Unit normal to surface on contactPoint1 (in world frame)
-
-   contactObj1::Vector{Union{Object3D,NOTHING}}
-   contactObj2::Vector{Union{Object3D,NOTHING}}
-
-   function ContactPairs(superObjs::Array{SuperObjsRow,1},
-                         noCPairs::Array{Array{Int64,1}},
-                         AABB::Array{Array{Basics.BoundingBox}},
-                         nz_max::Int)
+   function ContactPairs(world::Composition.Object3D, superObjs::Array{SuperObjsRow,1},
+                         noCPairs::Array{Array{Int64,1}}, AABB::Array{Array{Basics.BoundingBox}}, nz_max::Int, visualizeContactPoints::Bool, visualizeSupportPoints::Bool, defaultContactSphereDiameter::Float64)
       @assert(length(superObjs) > 0)
       @assert(length(noCPairs) == length(superObjs))
       @assert(nz_max > 0)
       dummyObject3D = Composition.emptyObject3DData
 
       # Determine the dimension of vector z (<= nzmax, but at most the number of all possible contact point combinations)
-      nz = 0
-
+      ncounter = 0
+      nzContact = 0
       collSuperObjs = Array{Array{Object3D,1},1}()
 
       for i_superObj = 1:length(superObjs)
@@ -76,49 +67,56 @@ struct ContactPairs
            if !(i_next_superObj in noCPairs[i_superObj])
              for i_obj = 1:length(superObj)
                 for i_nextObj =1:length(superObjs[i_next_superObj].superObjCollision.superObj)
-                   nz += 1
-                   if nz >=nz_max
-                      @goto AfterLoops
-      end; end; end; end; end; end
-
-      @label AfterLoops
-      if nz <= nz_max
+                   ncounter += 1
+      end; end; end; end; end
+      nmax = ncounter
+      # println("ncounter " , ncounter)
+      if ncounter <= nz_max
          allPossibleContactPairsInz = true
+         if ncounter > 2
+            nz = ncounter
+         else
+            nz = 2
+         end
       else
          allPossibleContactPairsInz = false
          nz = nz_max
       end
-#=
-      for a in collSuperObjs
-         println(" ")
-         for b in a
-            println(ModiaMath.fullName(b))
+
+      # println("nachher nz = ", nz)
+      # Allocate storage
+      if nz > 0
+         world.contactVisuObj1 = Vector{Object3D}[]
+         world.contactVisuObj2 = Vector{Object3D}[]
+         world.supportVisuObj1A = Vector{Object3D}[]
+         world.supportVisuObj1B = Vector{Object3D}[]
+         world.supportVisuObj1C = Vector{Object3D}[]
+         world.supportVisuObj2A = Vector{Object3D}[]
+         world.supportVisuObj2B = Vector{Object3D}[]
+         world.supportVisuObj2C = Vector{Object3D}[]
+         for i = 1:nz
+            if visualizeContactPoints
+               push!(world.contactVisuObj1, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Red", transparency=1.0)); fixed=false) )
+               push!(world.contactVisuObj2, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Black", transparency=1.0)); fixed=false) )
+            end
+            if visualizeSupportPoints
+               push!(world.supportVisuObj1A, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Red", transparency=1.0)); fixed=false) )
+               push!(world.supportVisuObj1B, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Red", transparency=1.0)); fixed=false) )
+               push!(world.supportVisuObj1C, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Red", transparency=1.0)); fixed=false) )
+               push!(world.supportVisuObj2A, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Black", transparency=1.0)); fixed=false) )
+               push!(world.supportVisuObj2B, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Black", transparency=1.0)); fixed=false) )
+               push!(world.supportVisuObj2C, Object3D(world, Modia3D.Sphere(defaultContactSphereDiameter, material= Modia3D.Material(color="Black", transparency=1.0)); fixed=false) )
+            end
          end
       end
 
-      println("nz = $nz , nz_max = $nz_max")
-=#
-      # Allocate storage
-      z = fill(42.0, nz)
-      defaultPoint   = MVector{3,Float64}(0.0,0.0,0.0)
-      contactPoint1  = [defaultPoint for i = 1:nz]
-      contactPoint2  = [defaultPoint for i = 1:nz]
-      contactNormal  = [defaultPoint for i = 1:nz]
-
-      contactObj1    = Vector{Union{Object3D,NOTHING}}(nothing,nz)
-      contactObj2    = Vector{Union{Object3D,NOTHING}}(nothing,nz)
-
-      for i = 1:nz
-         contactObj1[i] = nothing
-         contactObj2[i] = nothing
-      end
-      new(collSuperObjs, noCPairs, AABB, dummyObject3D, length(collSuperObjs), nz, allPossibleContactPairsInz,
-          z, contactPoint1, contactPoint2, contactNormal, contactObj1, contactObj2)
+      new(collSuperObjs, noCPairs, AABB, dummyObject3D, nmax, length(collSuperObjs), nz, nzContact, allPossibleContactPairsInz)
    end
 end
 
 initializeContactDetection!(ch::Modia3D.AbstractContactDetection, collSuperObjs::Array{Array{Modia3D.AbstractObject3Ddata}}, noCPairs::Array{Array{Int64,1}}) = error("No contact detection handler defined.")
-selectContactPairs!(ch::Modia3D.AbstractContactDetection)            = error("No contact detection handler defined.")
+selectContactPairsWithEvent!(ch::Modia3D.AbstractContactDetection)   = error("No contact detection handler defined.")
+selectContactPairsNoEvent!(ch::Modia3D.AbstractContactDetection)     = error("No contact detection handler defined.")
 getDistances!(ch::Modia3D.AbstractContactDetection)                  = error("No contact detection handler defined.")
 setComputationFlag(ch::Modia3D.AbstractContactDetection)             = error("No contact detection handler defined.")
 closeContactDetection!(ch::Modia3D.AbstractContactDetection)         = error("No contact detection handler defined.")
@@ -238,6 +236,9 @@ struct SceneOptions
 
    # ContactDetection
    enableContactDetection::Bool   # = true, if contact detection is enabled
+   elasticContactReductionFactor::Float64   # c_res_used = c_res * elasticContactReductionFactor (> 0)
+
+   defaultContactSphereDiameter::Float64   # = true, if contact points are visualized
 
    function SceneOptions(;contactDetection       = ContactDetectionMPR_handler(),
                           nz_max                 = 100,
@@ -260,7 +261,9 @@ struct SceneOptions
                           defaultN_to_m          = 1000,
                           defaultNm_to_m         = 1000,
                           enableContactDetection = true,
-                          useOptimizedStructure  = true)
+                          elasticContactReductionFactor = 1.0,
+                          useOptimizedStructure  = true,
+                          defaultContactSphereDiameter = 0.1)
       @assert(nz_max > 0)
       @assert(nominalLength > 0.0)
       @assert(defaultFrameLength > 0.0)
@@ -272,8 +275,9 @@ struct SceneOptions
       @assert(defaultArrowDiameter > 0.0)
       @assert(defaultN_to_m > 0.0)
       @assert(defaultNm_to_m  > 0.0)
+      @assert(defaultContactSphereDiameter > 0.0)
 
-      new(useOptimizedStructure,
+      scene = new(useOptimizedStructure,
           contactDetection,
           nz_max,
           gravityField,
@@ -294,7 +298,13 @@ struct SceneOptions
           defaultArrowDiameter,
           defaultN_to_m,
           defaultNm_to_m,
-          enableContactDetection)
+          enableContactDetection,
+          elasticContactReductionFactor,
+          defaultContactSphereDiameter)
+      scene.contactDetection.visualizeContactPoints       = visualizeContactPoints
+      scene.contactDetection.visualizeSupportPoints       = visualizeSupportPoints
+      scene.contactDetection.defaultContactSphereDiameter = defaultContactSphereDiameter
+      return scene
    end
 end
 
